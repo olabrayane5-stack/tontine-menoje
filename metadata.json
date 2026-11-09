@@ -1,0 +1,6 @@
+{
+  "name": "Tontine M.E.NO.JE",
+  "description": "Application web et PWA de gestion de tontine pour l'église M.E.NO.JE avec suivi des versements, classement Duolingo, relevés et assistant IA.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tontine M.E.NO.JE - Gestion des Cotisations</title>
+    <meta name="description" content="Application de gestion de tontine pour l'église M.E.NO.JE : suivi des versements du dimanche, calcul des 3%, relevés individuels et classement solidaire." />
+    <meta property="og:title" content="Tontine M.E.NO.JE - Gestion des Cotisations" />
+    <meta property="og:description" content="Application de gestion de tontine pour l'église M.E.NO.JE : suivi des versements du dimanche, calcul des 3%, relevés individuels et classement solidaire." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="theme-color" content="#f6f7fb" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/png" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icons/icon-180.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Tontine" />
+    <meta name="color-scheme" content="light dark" />
+    <script>
+      // Applique le thème avant le premier rendu pour éviter un flash clair.
+      (function () {
+        try {
+          var stored = localStorage.getItem('tontine-menoje:theme');
+          var dark = stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+          if (dark) document.documentElement.classList.add('dark');
+          document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', dark ? '#0a1122' : '#f6f7fb');
+        } catch (e) {
+          /* stockage indisponible : on garde le thème clair */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

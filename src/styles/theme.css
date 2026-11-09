@@ -1,0 +1,138 @@
+/* ==========================================================================
+   Tontine M.E.NO.JE — Système de design
+   Toutes les couleurs, rayons, ombres et durées d'animation vivent ici.
+   Les composants consomment ces variables (directement ou via les classes
+   utilitaires de src/index.css) : aucune couleur ne doit être écrite en dur.
+   ========================================================================== */
+
+:root {
+  /* --- Marque ------------------------------------------------------------ */
+  --brand-primary: #14213d;
+  --brand-primary-soft: #1e2e52;
+  --brand-primary-contrast: #ffffff;
+  --brand-accent: #e0a526;
+  --brand-accent-strong: #c4881a;
+  --brand-accent-contrast: #1a1405;
+
+  /* --- États ------------------------------------------------------------- */
+  --state-positive: #1f9d6b;
+  --state-positive-soft: rgb(31 157 107 / 0.12);
+  --state-negative: #d64545;
+  --state-negative-strong: #b93434;
+  --state-negative-soft: rgb(214 69 69 / 0.12);
+  --state-warning: #c9821b;
+  --state-warning-soft: rgb(201 130 27 / 0.14);
+  --state-info: #3b6fd4;
+  --state-info-soft: rgb(59 111 212 / 0.12);
+
+  /* --- Surfaces ---------------------------------------------------------- */
+  --surface-page: #f6f7fb;
+  --surface-card: #ffffff;
+  --surface-muted: #f1f3f9;
+  --surface-raised: #ffffff;
+  --surface-inset: #eef1f7;
+  --surface-inverse: #14213d;
+  --surface-overlay: rgb(10 17 34 / 0.55);
+
+  /* --- Bordures ---------------------------------------------------------- */
+  --border-subtle: #e6e9f2;
+  --border-default: #d9deea;
+  --border-strong: #c3cad9;
+
+  /* --- Texte ------------------------------------------------------------- */
+  --text-primary: #14213d;
+  --text-secondary: #6b7280;
+  --text-muted: #8b93a5;
+  --text-inverse: #ffffff;
+  --text-on-accent: #1a1405;
+
+  /* --- Rayons ------------------------------------------------------------ */
+  --radius-xs: 8px;
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 22px;
+  --radius-xl: 28px;
+  --radius-pill: 999px;
+
+  /* --- Ombres ------------------------------------------------------------ */
+  --shadow-xs: 0 1px 2px rgb(20 33 61 / 0.05);
+  --shadow-card: 0 4px 20px rgba(20, 33, 61, 0.08);
+  --shadow-card-hover: 0 12px 28px rgba(20, 33, 61, 0.12);
+  --shadow-pop: 0 24px 60px -28px rgb(20 33 61 / 0.45);
+  --shadow-accent: 0 12px 26px -14px rgb(224 165 38 / 0.7);
+
+  /* --- Typographie ------------------------------------------------------- */
+  --font-heading: "Poppins", "Plus Jakarta Sans Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Inter Variable", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", "Menlo", monospace;
+
+  --text-xs: 0.75rem; /* 12 px — libellés secondaires */
+  --text-sm: 0.875rem; /* 14 px — texte dense */
+  --text-base: 1rem; /* 16 px — texte courant */
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+  --text-4xl: 2.25rem;
+
+  /* --- Mouvement --------------------------------------------------------- */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duration-fast: 160ms;
+  --duration-base: 240ms;
+  --duration-slow: 420ms;
+
+  /* --- Mise en page ------------------------------------------------------ */
+  --header-height: 4.5rem;
+  --mobile-nav-height: 4.75rem;
+  --container-width: 1200px;
+  --focus-ring: 0 0 0 4px rgb(224 165 38 / 0.25);
+
+  color-scheme: light;
+}
+
+/* --- Mode sombre --------------------------------------------------------- */
+.dark {
+  --brand-primary: #eef2fb;
+  --brand-primary-soft: #1b2a4a;
+  --brand-primary-contrast: #0a1122;
+  --brand-accent: #e8b54a;
+  --brand-accent-strong: #f0c76a;
+  --brand-accent-contrast: #1a1405;
+
+  --state-positive: #34c98d;
+  --state-positive-soft: rgb(52 201 141 / 0.14);
+  --state-negative: #f27777;
+  --state-negative-soft: rgb(242 119 119 / 0.14);
+  --state-warning: #e6a23c;
+  --state-warning-soft: rgb(230 162 60 / 0.16);
+  --state-info: #6d9bf0;
+  --state-info-soft: rgb(109 155 240 / 0.16);
+
+  --surface-page: #0a1122;
+  --surface-card: #111a2e;
+  --surface-muted: #16213a;
+  --surface-raised: #17233d;
+  --surface-inset: #0e1729;
+  --surface-inverse: #eef2fb;
+  --surface-overlay: rgb(3 7 16 / 0.7);
+
+  --border-subtle: #1d2942;
+  --border-default: #24314c;
+  --border-strong: #33415f;
+
+  --text-primary: #f3f6fd;
+  --text-secondary: #9aa5b8;
+  --text-muted: #7d8798;
+  --text-inverse: #0a1122;
+  --text-on-accent: #1a1405;
+
+  --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-card: 0 4px 20px rgb(0 0 0 / 0.35);
+  --shadow-card-hover: 0 14px 32px rgb(0 0 0 / 0.45);
+  --shadow-pop: 0 30px 70px -30px rgb(0 0 0 / 0.8);
+  --shadow-accent: 0 12px 26px -14px rgb(232 181 74 / 0.5);
+  --focus-ring: 0 0 0 4px rgb(232 181 74 / 0.28);
+
+  color-scheme: dark;
+}
