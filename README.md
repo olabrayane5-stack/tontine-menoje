@@ -99,8 +99,12 @@ Le manifeste (`public/manifest.webmanifest`) et le service worker (`public/sw.js
 
 ## Déploiement
 
+Site en ligne : **<https://tontine-menoje.vercel.app>**
+
+Le projet Vercel `tontine-menoje` est relié au dépôt GitHub : **chaque `git push` sur `main` déclenche un déploiement automatique** (build `vite build`, dossier `dist/`).
+
 ```bash
 npm run build
 ```
 
-Déposer le contenu de `dist/` sur un hébergement statique. Le guide intégré décrit la cible InfinityFree avec API PHP/MySQL.
+Le build peut aussi être déposé sur un hébergement statique. Le guide intégré décrit la cible InfinityFree avec API PHP/MySQL.
