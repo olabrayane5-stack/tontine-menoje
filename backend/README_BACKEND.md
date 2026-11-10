@@ -28,11 +28,16 @@ backend/
 │   ├── auth.php         # jetons Bearer, rôles, audit, anti-force brute
 │   ├── calculs.php      # stats, série, points, badges, réglages (miroir de tontineUtils.ts)
 │   └── router.php       # routeur minimaliste (méthodes + /:id)
-└── routes/
-    ├── ping.php         auth.php       members.php    sessions.php
-    ├── retraits.php     annonces.php   reglages.php   export.php
-    ├── me.php           classement.php
+├── routes/
+│   ├── ping.php         auth.php       members.php    sessions.php
+│   ├── retraits.php     annonces.php   reglages.php   export.php
+│   └── me.php           classement.php
+└── tests/
+    └── test-api.ps1     # test d'intégration des 26 routes (PowerShell)
 ```
+
+> Le dossier `tests/` ne doit **pas** être envoyé sur l'hébergement (le
+> `.htaccess` le neutralise de toute façon).
 
 Aucune dépendance externe : `php -l` suffit à vérifier la syntaxe.
 
@@ -493,6 +498,43 @@ Points de vigilance opérationnels :
 
 ## 12. Vérification avant mise en ligne
 
+### 12.1 Test d'intégration automatisé
+
+`tests/test-api.ps1` enchaîne les 26 routes et vérifie chaque code HTTP ainsi
+que les calculs (total après upsert, versements à 0, points, retenue, solde).
+
+> ⚠️ Le script **écrit en base**. Il exige une base de test fraîche, jamais la
+> production.
+
+```powershell
+# 1. Base de test + schéma + admin
+php backend/install.php --schema
+php backend/install.php "Pasteur Emmanuel" "+2290197000001" "Admin2026x"
+
+# 2. API démarrée (Apache, ou php -S avec le routeur du § 3)
+powershell -ExecutionPolicy Bypass -File backend/tests/test-api.ps1
+
+# 3. Autre cible (recette, préproduction)
+powershell -File backend/tests/test-api.ps1 `
+  -BaseUrl 'https://api.exemple.tld/api' `
+  -AdminPhone '+2290197000001' -AdminPassword 'Admin2026x'
+```
+
+Sortie attendue :
+
+```
+[OK]    login admin -> 200
+...
+[OK]    jeton revoque -> 401
+
+SUCCES : 60 verifications, 0 echec.
+```
+
+Le script sort en code `1` au premier échec bloquant, ce qui permet de
+l'enchaîner dans une CI (`exit 1` → build rouge).
+
+### 12.2 Contrôles manuels
+
 ```powershell
 # 1. Syntaxe de tous les fichiers PHP
 Get-ChildItem backend -Recurse -Filter *.php |
@@ -513,6 +555,7 @@ Liste finale :
 - [ ] `debug => false` et `install_key` retirée ou changée
 - [ ] `allowed_origins` limité au front réel
 - [ ] `/api/ping` renvoie `200` + `database:true` **depuis le navigateur du front**
+- [ ] `tests/test-api.ps1` : 0 échec sur la base de test
 - [ ] connexion admin testée, changement de mot de passe effectué
 - [ ] une session ouverte / fermée de bout en bout
 - [ ] sauvegarde JSON téléchargée et relue

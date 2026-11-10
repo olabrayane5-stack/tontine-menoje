@@ -6,6 +6,9 @@
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
+    # Le dossier de tests n'est jamais accessible depuis le web.
+    RewriteRule ^tests(/|$) - [R=404,L]
+
     # Ne pas réécrire les fichiers réellement présents (aucun ici, mais sûr).
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
@@ -15,7 +18,7 @@
 </IfModule>
 
 # Interdire l'accès direct aux sources et à la configuration.
-<FilesMatch "\.(sql|md|example\.php|ini|log)$">
+<FilesMatch "\.(sql|md|example\.php|ini|log|ps1|sh)$">
     <IfModule mod_authz_core.c>
         Require all denied
     </IfModule>
