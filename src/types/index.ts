@@ -90,6 +90,29 @@ export interface ParametresApp {
   pourcentage_retenue: number;
 }
 
+/** Ligne du classement calculée par le serveur (mode API). */
+export interface ClassementEntry {
+  rang: number;
+  userId: number;
+  nom: string;
+  points: number;
+  serieEnCours: number;
+  nombreDimanches: number;
+  totalVerse: number | null;
+  badges: string[];
+}
+
+/** Dimanche / session tel que renvoyé par l'API. */
+export interface SessionSummary {
+  id: number;
+  date: string;
+  statut: 'ouverte' | 'fermee';
+  ouverte: boolean;
+  nbVersements: number | null;
+  nbPresents: number | null;
+  total: number | null;
+}
+
 export interface AuditLog {
   id: number;
   user_id: number;

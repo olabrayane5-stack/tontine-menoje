@@ -3,7 +3,7 @@
     Test d'intégration complet de l'API Tontine M.E.NO.JE.
 
 .DESCRIPTION
-    Enchaîne les 26 routes dans l'ordre métier et vérifie chaque code HTTP.
+    Enchaîne les 27 routes dans l'ordre métier et vérifie chaque code HTTP.
     Le script ÉCRIT en base : il doit tourner sur une base de test fraîche
     (jamais sur la base de production).
 
@@ -145,13 +145,20 @@ ApiJson 'membre interdit POST /sessions' POST '/sessions' @{ date = '2026-11-22'
 ApiJson 'membre interdit export' GET '/export/backup' $null $t2 403 | Out-Null
 
 # ---------------------------------------------------------------- retraits
-ApiJson 'POST /retraits 3000' POST '/retraits' @{ userId = 2; montant = 3000; motif = 'Urgence familiale' } $admin 201 | Out-Null
+$retraitCree = ApiJson 'POST /retraits 3000' POST '/retraits' @{ userId = 2; montant = 3000; motif = 'Urgence familiale' } $admin 201
 ApiJson 'POST /retraits solde insuffisant' POST '/retraits' @{ userId = 2; montant = 9000; motif = 'Trop' } $admin 422 | Out-Null
 $listeRetraits = ApiJson 'GET /retraits' GET '/retraits' $null $admin
 if ($listeRetraits.total -ne 3000) { $script:echecs++; Write-Host '[ECHEC] total retraits attendu 3000' } else { Write-Host '[OK]    total retraits = 3000' }
 
 $releve2 = ApiJson 'GET /me/releve apres retrait' GET '/me/releve' $null $t2
 if ($releve2.totaux.soldeActuel -ne 2000) { $script:echecs++; Write-Host ("[ECHEC] solde apres retrait = {0} (attendu 2000)" -f $releve2.totaux.soldeActuel) } else { Write-Host '[OK]    solde apres retrait = 2000' }
+
+ApiJson 'DELETE /retraits inexistant' DELETE '/retraits/99999' $null $admin 404 | Out-Null
+ApiJson 'DELETE /retraits' DELETE ("/retraits/{0}" -f $retraitCree.retrait.id) $null $admin | Out-Null
+$listeApres = ApiJson 'GET /retraits apres suppression' GET '/retraits' $null $admin
+if ($listeApres.total -ne 0) { $script:echecs++; Write-Host ("[ECHEC] total retraits apres suppression = {0} (attendu 0)" -f $listeApres.total) } else { Write-Host '[OK]    total retraits apres suppression = 0' }
+$releve3 = ApiJson 'GET /me/releve apres suppression' GET '/me/releve' $null $t2
+if ($releve3.totaux.soldeActuel -ne 5000) { $script:echecs++; Write-Host ("[ECHEC] solde apres suppression = {0} (attendu 5000)" -f $releve3.totaux.soldeActuel) } else { Write-Host '[OK]    solde apres suppression = 5000' }
 
 # ---------------------------------------------------------------- mot de passe
 ApiJson 'change-password ancien faux' POST '/change-password' @{ ancien = 'faux'; nouveau = 'Nouveau2026' } $t2 422 | Out-Null

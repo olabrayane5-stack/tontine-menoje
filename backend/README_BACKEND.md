@@ -33,7 +33,7 @@ backend/
 │   ├── retraits.php     annonces.php   reglages.php   export.php
 │   └── me.php           classement.php
 └── tests/
-    └── test-api.ps1     # test d'intégration des 26 routes (PowerShell)
+    └── test-api.ps1     # test d'intégration des 27 routes (PowerShell)
 ```
 
 > Le dossier `tests/` ne doit **pas** être envoyé sur l'hébergement (le
@@ -281,11 +281,27 @@ Le front lit une variable d'environnement Vite :
 VITE_API_URL=https://VOTRE-SOUS-DOMAINE.infinityfreeapp.com/api
 ```
 
-Puis dans le client HTTP :
+Puis dans le client HTTP (`src/api/client.ts`) :
 
 ```ts
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api';
+const API_URL = (import.meta.env.VITE_API_URL ?? '').trim().replace(/\/+$/, '');
+export const isApiMode = API_URL.length > 0;
 ```
+
+Comportement du front :
+
+- **`VITE_API_URL` absente** → mode démonstration : tout reste dans
+  `localStorage`, comme avant (aucune régression).
+- **`VITE_API_URL` définie** → mode API : connexion `POST /login`, jeton
+  conservé sous `tontine-menoje:v1:token`, reprise de session via `GET /me`.
+  - Admin : chargement complet via `GET /export/backup` + `GET /sessions` ;
+    saisie via `PUT /sessions/:id/versements` (session créée à la volée si
+    besoin), retraits, membres, annonces, réglages et exports passent par
+    l'API.
+  - Membre : `GET /me/releve`, `GET /classement`, `GET /annonces`,
+    `GET /reglages` ; les statistiques et le classement affichés viennent du
+    serveur.
+  - Un `401` efface le jeton et renvoie à l'écran de connexion.
 
 Rappels :
 
@@ -500,7 +516,7 @@ Points de vigilance opérationnels :
 
 ### 12.1 Test d'intégration automatisé
 
-`tests/test-api.ps1` enchaîne les 26 routes et vérifie chaque code HTTP ainsi
+`tests/test-api.ps1` enchaîne les 27 routes et vérifie chaque code HTTP ainsi
 que les calculs (total après upsert, versements à 0, points, retenue, solde).
 
 > ⚠️ Le script **écrit en base**. Il exige une base de test fraîche, jamais la

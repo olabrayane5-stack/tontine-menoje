@@ -1,5 +1,14 @@
-import React, { useEffect, useState } from 'react';
-import { User, Versement, Retrait, Annonce, ParametresApp, ParsedVersementsResult, AppData } from '../types';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  User,
+  Versement,
+  Retrait,
+  Annonce,
+  ParametresApp,
+  ParsedVersementsResult,
+  AppData,
+  SessionSummary,
+} from '../types';
 import {
   calculateUserStats,
   formatMoney,
@@ -14,6 +23,7 @@ import { AnimatedAmount } from './AnimatedAmount';
 import { WhatsAppModal } from './WhatsAppModal';
 import { BackupCard } from './BackupCard';
 import { SundayManager } from './SundayManager';
+import { SessionsCard } from './api/SessionsCard';
 import { Stagger, StaggerItem } from './motion/Stagger';
 import { Modal } from './ui/Modal';
 import { useToast } from './ui/Toast';
@@ -66,20 +76,32 @@ interface AdminDashboardProps {
   sundaysList: string[];
   annonces: Annonce[];
   parametres: ParametresApp;
-  onAddVersement: (v: Omit<Versement, 'id' | 'created_at'>) => void;
-  onAddBatchVersements: (items: Array<Omit<Versement, 'id' | 'created_at'>>) => void;
-  onDeleteVersement: (id: number) => void;
-  onAddRetrait: (r: Omit<Retrait, 'id' | 'created_at'>) => void;
-  onDeleteRetrait: (id: number) => void;
-  onAddUser: (u: Omit<User, 'id' | 'created_at'>) => void;
+  onAddVersement: (v: Omit<Versement, 'id' | 'created_at'>) => Promise<boolean | void> | boolean | void;
+  onAddBatchVersements: (
+    items: Array<Omit<Versement, 'id' | 'created_at'>>
+  ) => Promise<boolean | void> | boolean | void;
+  onDeleteVersement: (id: number) => Promise<boolean | void> | boolean | void;
+  onAddRetrait: (r: Omit<Retrait, 'id' | 'created_at'>) => Promise<boolean | void> | boolean | void;
+  onDeleteRetrait: (id: number) => Promise<boolean | void> | boolean | void;
+  onAddUser: (
+    u: Omit<User, 'id' | 'created_at'>
+  ) => Promise<{ motDePasseProvisoire?: string } | void> | void;
   onToggleUserStatus: (userId: number) => void;
-  onResetUserPassword: (userId: number) => string;
+  onResetUserPassword: (userId: number) => Promise<string> | string;
   onAddAnnonce: (a: Omit<Annonce, 'id' | 'date_publication'>) => void;
   onDeleteAnnonce: (id: number) => void;
   onUpdateParametres: (p: Partial<ParametresApp>) => void;
   onRestoreData: (data: AppData) => void;
   onAddSunday: (date: string) => { ok: boolean; message: string };
   onDeleteSunday: (date: string) => { ok: boolean; message: string };
+  /** Mode API : sessions gérées côté serveur, exports serveur, etc. */
+  apiMode?: boolean;
+  sessions?: SessionSummary[];
+  onOpenSession?: (date: string) => Promise<{ ok: boolean; message: string }>;
+  onCloseSession?: (date: string) => Promise<{ ok: boolean; message: string }>;
+  onReopenSession?: (date: string) => Promise<{ ok: boolean; message: string }>;
+  onExportBackup?: () => Promise<void>;
+  onExportCsv?: () => Promise<void>;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -104,6 +126,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onRestoreData,
   onAddSunday,
   onDeleteSunday,
+  apiMode = false,
+  sessions = [],
+  onOpenSession,
+  onCloseSession,
+  onReopenSession,
+  onExportBackup,
+  onExportCsv,
 }) => {
   const [activeSection, setActiveSection] = useState<'saisie' | 'retraits' | 'membres' | 'cloture' | 'annonces' | 'ia_analyse' | 'reglages'>('saisie');
   const toast = useToast();
@@ -167,6 +196,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const sundayVersements = versements.filter((v) => v.date_dimanche === selectedSunday);
   const sundayTotal = sundayVersements.reduce((sum, v) => sum + Number(v.montant), 0);
 
+  // En mode API, un dimanche fermé est verrouillé côté serveur.
+  const selectedSession = sessions.find((session) => session.date === selectedSunday);
+  const selectedSessionClosed = selectedSession?.statut === 'fermee';
+
   // Index membre -> versement du dimanche (un seul par membre grâce à l'upsert)
   const recordedByUser = new Map<number, Versement>();
   sundayVersements.forEach((versement) => {
@@ -226,6 +259,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setParsedPreview(null);
   }, [selectedSunday]);
 
+  // Le calendrier peut arriver après le premier rendu (mode API) : on recale
+  // la sélection sur le dimanche le plus récent disponible.
+  useEffect(() => {
+    if (sundaysList.length === 0) return;
+    if (!sundaysList.includes(selectedSunday)) {
+      setSelectedSunday(sundaysList[sundaysList.length - 1]);
+    }
+  }, [sundaysList, selectedSunday]);
+
+  // En mode API, la collecte suit la session ouverte : dès qu'un dimanche est
+  // ouvert (ou rouvert), il devient la cible de la saisie.
+  const previousOpenSessionDate = useRef<string | null>(null);
+  useEffect(() => {
+    if (!apiMode) return;
+    const openDate = sessions.find((session) => session.ouverte)?.date ?? null;
+    if (openDate && openDate !== previousOpenSessionDate.current) {
+      setSelectedSunday(openDate);
+    }
+    previousOpenSessionDate.current = openDate;
+  }, [apiMode, sessions]);
+
   // Empêche la page de défiler derrière le pavé de collecte.
   useEffect(() => {
     if (collecteMemberId === null) return;
@@ -273,8 +327,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   // Enregistre le montant du membre affiché. `advance` enchaîne sur le suivant.
-  const saveCollecte = (advance: boolean) => {
+  const saveCollecte = async (advance: boolean) => {
     if (!collecteMember) return;
+
+    if (apiMode && selectedSessionClosed) {
+      toast.error('Session fermée : rouvrez-la avant de modifier les versements.');
+      return;
+    }
 
     const parsed = parseAmountInput(collecteAmount);
     if (parsed === null) {
@@ -285,7 +344,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
     const saved = recordedByUser.get(collecteMember.id);
     if (!saved || saved.montant !== parsed) {
-      onAddVersement({
+      const accepted = await onAddVersement({
         session_id: 1,
         user_id: collecteMember.id,
         date_dimanche: selectedSunday,
@@ -293,6 +352,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         mode_reglement: saved?.mode_reglement ?? 'especes',
         enregistre_par: currentUser.id,
       });
+      if (accepted === false) return;
       vibrate(12);
       flashSaisieSaved();
     }
@@ -316,8 +376,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setBatchSaveSuccess(false);
   };
 
-  const handleConfirmBatchSave = () => {
+  const handleConfirmBatchSave = async () => {
     if (!parsedPreview || parsedPreview.matched.length === 0) return;
+
+    if (apiMode && selectedSessionClosed) {
+      toast.error('Session fermée : rouvrez-la avant de modifier les versements.');
+      return;
+    }
 
     const newEntries = parsedPreview.matched.map((item) => ({
       session_id: 1,
@@ -329,7 +394,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       commentaire: 'Saisie rapide par texte validée',
     }));
 
-    onAddBatchVersements(newEntries);
+    const accepted = await onAddBatchVersements(newEntries);
+    if (accepted === false) return;
+
     setBatchSaveSuccess(true);
     setParsedPreview(null);
     setRawIaBatchText('');
@@ -338,7 +405,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   // Enregistrement d'un retrait partiel
-  const handleCreateRetrait = (e: React.FormEvent) => {
+  const handleCreateRetrait = async (e: React.FormEvent) => {
     e.preventDefault();
     setRetraitError('');
     const amount = parseFloat(retraitAmount);
@@ -353,7 +420,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       return;
     }
 
-    onAddRetrait({
+    const accepted = await onAddRetrait({
       session_id: 1,
       user_id: retraitUserId,
       date_retrait: retraitDate,
@@ -361,37 +428,52 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       motif: retraitMotif.trim() || undefined,
       enregistre_par: currentUser.id,
     });
+    if (accepted === false) return;
 
     setRetraitAmount('10000');
     setRetraitMotif('');
     toast.success('Retrait partiel enregistré.');
   };
 
-  const handleCreateMember = (e: React.FormEvent) => {
+  const handleCreateMember = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMemberName.trim() || !newMemberPhone.trim()) return;
 
-    onAddUser({
-      nom_complet: newMemberName.trim(),
-      telephone: newMemberPhone.trim(),
-      password: '123',
-      role: 'membre',
-      statut: 'actif',
-      must_change_password: true,
-      whatsapp_disponible: newMemberWhatsapp,
-      notes_admin: newMemberNotes.trim() || undefined,
-    });
+    try {
+      const result = await onAddUser({
+        nom_complet: newMemberName.trim(),
+        telephone: newMemberPhone.trim(),
+        password: '123',
+        role: 'membre',
+        statut: 'actif',
+        must_change_password: true,
+        whatsapp_disponible: newMemberWhatsapp,
+        notes_admin: newMemberNotes.trim() || undefined,
+      });
 
-    setShowAddMemberModal(false);
-    setNewMemberName('');
-    setNewMemberPhone('');
-    setNewMemberNotes('');
-    toast.success('Nouveau membre inscrit. Mot de passe provisoire : 123.');
+      setShowAddMemberModal(false);
+      setNewMemberName('');
+      setNewMemberPhone('');
+      setNewMemberNotes('');
+      const provisional =
+        result && 'motDePasseProvisoire' in result ? result.motDePasseProvisoire : undefined;
+      toast.success(
+        provisional
+          ? `Nouveau membre inscrit. Mot de passe provisoire : ${provisional}`
+          : 'Nouveau membre inscrit. Mot de passe provisoire : 123.'
+      );
+    } catch {
+      // L'erreur serveur est déjà signalée par une notification.
+    }
   };
 
-  const handleResetPassword = (u: User) => {
-    const newPass = onResetUserPassword(u.id);
-    setTempPasswordModal({ memberName: u.nom_complet, pass: newPass });
+  const handleResetPassword = async (u: User) => {
+    try {
+      const newPass = await onResetUserPassword(u.id);
+      setTempPasswordModal({ memberName: u.nom_complet, pass: newPass });
+    } catch {
+      toast.error('Réinitialisation impossible. Vérifiez la connexion au serveur.');
+    }
   };
 
   const handleRunAdminAiAnalysis = (promptText?: string) => {
@@ -598,6 +680,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             </div>
           </div>
+
+          {apiMode && selectedSessionClosed && (
+            <div className="flex items-start gap-2.5 rounded-2xl border border-rose-300/70 bg-rose-50/80 px-4 py-3 text-[11px] leading-relaxed text-rose-900 sm:text-xs">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
+              <p>
+                <strong>Dimanche fermé.</strong> Les versements de ce dimanche sont verrouillés par
+                le serveur. Rouvrez la session dans <strong>Réglages → Dimanches & sessions</strong>{' '}
+                pour corriger un montant.
+              </p>
+            </div>
+          )}
 
           <div className="flex items-start gap-2.5 rounded-2xl border border-amber-300/70 bg-amber-50/80 px-4 py-3 text-[11px] leading-relaxed text-amber-900 sm:text-xs">
             <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
@@ -1665,14 +1758,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </button>
             </div>
 
-            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between">
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between gap-3">
               <div>
                 <p className="font-bold text-slate-900 text-sm">Frais de gestion église ({parametres.pourcentage_retenue}%)</p>
                 <p className="text-xs text-slate-500">Pourcentage retenu sur le total versé à la fin de l'exercice.</p>
               </div>
-              <span className="font-mono font-bold text-slate-800 text-sm bg-white px-3 py-1 rounded-xl border border-slate-300">
-                {parametres.pourcentage_retenue} %
-              </span>
+              {apiMode ? (
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={0.5}
+                  value={parametres.pourcentage_retenue}
+                  onChange={(e) => {
+                    const next = Number(e.target.value);
+                    if (Number.isFinite(next) && next >= 0 && next <= 100) {
+                      onUpdateParametres({ pourcentage_retenue: next });
+                    }
+                  }}
+                  aria-label="Pourcentage de retenue de l'église"
+                  className="field w-24 text-center text-sm font-bold"
+                />
+              ) : (
+                <span className="font-mono font-bold text-slate-800 text-sm bg-white px-3 py-1 rounded-xl border border-slate-300">
+                  {parametres.pourcentage_retenue} %
+                </span>
+              )}
             </div>
 
             <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between">
@@ -1689,16 +1800,34 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               />
             </div>
 
-            <SundayManager
-              sundaysList={sundaysList}
-              versements={versements}
-              onAddSunday={onAddSunday}
-              onDeleteSunday={onDeleteSunday}
-            />
+            {apiMode ? (
+              <SessionsCard
+                sessions={sessions}
+                devise={parametres.devise}
+                onOpen={onOpenSession ?? (async () => ({ ok: false, message: 'Action indisponible.' }))}
+                onClose={onCloseSession ?? (async () => ({ ok: false, message: 'Action indisponible.' }))}
+                onReopen={onReopenSession ?? (async () => ({ ok: false, message: 'Action indisponible.' }))}
+              />
+            ) : (
+              <SundayManager
+                sundaysList={sundaysList}
+                versements={versements}
+                onAddSunday={onAddSunday}
+                onDeleteSunday={onDeleteSunday}
+              />
+            )}
 
             <BackupCard
               data={{ users, versements, retraits, sundaysList, annonces, parametres }}
               onRestore={onRestoreData}
+              onExportJson={onExportBackup}
+              onExportCsv={onExportCsv}
+              canRestore={!apiMode}
+              hint={
+                apiMode
+                  ? 'Les exports sont générés par le serveur à partir de la base de données de l’église.'
+                  : undefined
+              }
             />
           </div>
         </div>

@@ -170,6 +170,7 @@ et les réponses de fermeture ; ils valent `null` ailleurs.
 | `POST` | `/api/sessions/:id/reopen` | admin | Rouvrir (journalisé) |
 | `GET` | `/api/retraits` | admin | Liste des retraits |
 | `POST` | `/api/retraits` | admin | Accorder un retrait partiel |
+| `DELETE` | `/api/retraits/:id` | admin | Annuler un retrait partiel |
 | `POST` | `/api/annonces` | admin | Publier une annonce |
 | `DELETE` | `/api/annonces/:id` | admin | Supprimer une annonce |
 | `PUT` | `/api/reglages` | admin | Modifier les réglages |
@@ -634,6 +635,14 @@ modifiables.
 |---|---|
 | `404` | Membre introuvable |
 | `422` | Montant ≤ 0, motif vide, date invalide ou **solde insuffisant** (`"Solde insuffisant : 2 000 FCFA disponibles, 9 000 FCFA demandés."`) |
+
+### 7.3 `DELETE /api/retraits/:id`
+
+Annule un retrait partiel : le montant est recrédité au membre (les totaux sont
+recalculés à la volée) et l'opération est journalisée (`delete_retrait`).
+
+**Réponse `200`** : `{ "ok": true }`
+**Erreurs** : `404` (retrait introuvable).
 
 ---
 

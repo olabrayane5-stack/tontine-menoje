@@ -125,3 +125,35 @@ $router->add('POST', '/retraits', static function (): void {
         'soldeActuel' => (int) $apres['soldeActuel'],
     ], 201);
 });
+
+// --------------------------------------------------------------------------
+// DELETE /api/retraits/:id — annulation d'un retrait partiel
+// --------------------------------------------------------------------------
+$router->add('DELETE', '/retraits/:id', static function (array $params): void {
+    $utilisateur = utilisateur_courant();
+    exiger_admin($utilisateur);
+
+    $id = (int) ($params['id'] ?? 0);
+    $retrait = sql_one('SELECT id, user_id, montant, date FROM retraits WHERE id = :id', ['id' => $id]);
+    if ($retrait === null) {
+        api_error('Retrait introuvable.', 404);
+    }
+
+    sql_exec('DELETE FROM retraits WHERE id = :id', ['id' => $id]);
+
+    journaliser(
+        (int) $utilisateur['id'],
+        'delete_retrait',
+        sprintf(
+            'Annulation du retrait #%d : membre #%d, %d FCFA (%s)',
+            $id,
+            (int) $retrait['user_id'],
+            (int) $retrait['montant'],
+            (string) $retrait['date']
+        )
+    );
+
+    reinitialiser_stats();
+
+    json_response(['ok' => true]);
+});

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Versement, Retrait, ParametresApp } from '../types';
+import { Badge, ClassementEntry, User, Versement, Retrait, ParametresApp, UserStats } from '../types';
 import { calculateUserStats, formatMoney } from '../utils/tontineUtils';
 import { Stagger, StaggerItem } from './motion/Stagger';
 import {
@@ -24,6 +24,10 @@ interface LeaderboardDuolingoProps {
   sundaysList: string[];
   parametres: ParametresApp;
   currentUserId?: number;
+  /** Classement calculé par le serveur (mode API) : prioritaire sur le calcul local. */
+  serverClassement?: ClassementEntry[];
+  /** Définitions des badges renvoyées par `GET /api/classement`. */
+  badgeDefinitions?: Badge[];
 }
 
 type FilterKey = 'tous' | 'series' | 'badges';
@@ -35,21 +39,61 @@ export const LeaderboardDuolingo: React.FC<LeaderboardDuolingoProps> = ({
   sundaysList,
   parametres,
   currentUserId,
+  serverClassement,
+  badgeDefinitions,
 }) => {
   const [filter, setFilter] = useState<FilterKey>('tous');
 
   const activeMembers = users.filter((u) => u.role === 'membre' && u.statut === 'actif');
 
-  const membersWithStats = activeMembers.map((member) => ({
-    member,
-    stats: calculateUserStats(
-      member.id,
-      versements,
-      retraits,
-      sundaysList,
-      parametres.pourcentage_retenue
-    ),
-  }));
+  const membersWithStats: Array<{ member: User; stats: UserStats }> = serverClassement
+    ? serverClassement.map((entry) => {
+        const definitions = new Map((badgeDefinitions ?? []).map((badge) => [badge.code, badge]));
+        return {
+          member: {
+            id: entry.userId,
+            nom_complet: entry.nom,
+            telephone: '',
+            role: 'membre',
+            statut: 'actif',
+            must_change_password: false,
+            whatsapp_disponible: true,
+            created_at: '',
+          },
+          stats: {
+            userId: entry.userId,
+            totalVerse: entry.totalVerse ?? 0,
+            totalRetire: 0,
+            soldeActuel: 0,
+            nombreDimanches: entry.nombreDimanches,
+            serieEnCours: entry.serieEnCours,
+            points: entry.points,
+            badges: entry.badges.map(
+              (code, index) =>
+                definitions.get(code) ?? {
+                  id: index + 1,
+                  code,
+                  nom: code,
+                  description: '',
+                  icone: 'Footprints',
+                  points: 0,
+                }
+            ),
+            partEglise: 0,
+            montantNetPrevisionnel: 0,
+          },
+        };
+      })
+    : activeMembers.map((member) => ({
+        member,
+        stats: calculateUserStats(
+          member.id,
+          versements,
+          retraits,
+          sundaysList,
+          parametres.pourcentage_retenue
+        ),
+      }));
 
   // Tri par points puis par série de dimanches consécutifs
   const sortedMembers = [...membersWithStats].sort((a, b) => {
@@ -78,7 +122,7 @@ export const LeaderboardDuolingo: React.FC<LeaderboardDuolingoProps> = ({
     : 0;
 
   const filters: Array<{ key: FilterKey; label: string; icon: React.ComponentType<{ className?: string }>; count: number }> = [
-    { key: 'tous', label: 'Tous les membres', icon: Users, count: activeMembers.length },
+    { key: 'tous', label: 'Tous les membres', icon: Users, count: sortedMembers.length },
     { key: 'series', label: 'Séries en feu', icon: Flame, count: sortedMembers.filter((i) => i.stats.serieEnCours >= 3).length },
     { key: 'badges', label: 'Multi-badgés', icon: Award, count: sortedMembers.filter((i) => i.stats.badges.length >= 2).length },
   ];

@@ -1,33 +1,79 @@
 import React, { useRef, useState } from 'react';
 import { AppData } from '../types';
 import { downloadBackup, downloadCsv, parseBackup } from '../utils/backup';
-import { AlertTriangle, CheckCircle2, Database, Download, FileSpreadsheet, Upload } from 'lucide-react';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Database,
+  Download,
+  FileSpreadsheet,
+  Loader2,
+  Upload,
+} from 'lucide-react';
 
 interface BackupCardProps {
   data: AppData;
-  onRestore: (data: AppData) => void;
+  onRestore?: (data: AppData) => void;
+  /** Exports serveur (mode API). À défaut, les exports locaux sont utilisés. */
+  onExportJson?: () => Promise<void>;
+  onExportCsv?: () => Promise<void>;
+  /** La restauration n'est proposée qu'en mode démonstration. */
+  canRestore?: boolean;
+  hint?: string;
 }
 
 type Feedback = { type: 'success' | 'error'; text: string };
 
-export const BackupCard: React.FC<BackupCardProps> = ({ data, onRestore }) => {
+export const BackupCard: React.FC<BackupCardProps> = ({
+  data,
+  onRestore,
+  onExportJson,
+  onExportCsv,
+  canRestore = true,
+  hint,
+}) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const [busy, setBusy] = useState<'json' | 'csv' | null>(null);
 
-  const handleExportJson = () => {
-    downloadBackup(data);
-    setFeedback({ type: 'success', text: 'Sauvegarde JSON téléchargée.' });
+  const handleExportJson = async () => {
+    setBusy('json');
+    setFeedback(null);
+    try {
+      if (onExportJson) await onExportJson();
+      else downloadBackup(data);
+      setFeedback({ type: 'success', text: 'Sauvegarde JSON téléchargée.' });
+    } catch (error) {
+      setFeedback({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Téléchargement impossible.',
+      });
+    } finally {
+      setBusy(null);
+    }
   };
 
-  const handleExportCsv = () => {
-    downloadCsv(data);
-    setFeedback({ type: 'success', text: 'Historique des opérations exporté en CSV.' });
+  const handleExportCsv = async () => {
+    setBusy('csv');
+    setFeedback(null);
+    try {
+      if (onExportCsv) await onExportCsv();
+      else downloadCsv(data);
+      setFeedback({ type: 'success', text: 'Historique des opérations exporté en CSV.' });
+    } catch (error) {
+      setFeedback({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Téléchargement impossible.',
+      });
+    } finally {
+      setBusy(null);
+    }
   };
 
   const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
-    if (!file) return;
+    if (!file || !onRestore) return;
 
     try {
       const restored = parseBackup(await file.text());
@@ -52,15 +98,16 @@ export const BackupCard: React.FC<BackupCardProps> = ({ data, onRestore }) => {
   };
 
   return (
-    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-4">
+    <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
       <div className="flex items-start gap-3">
-        <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-          <Database className="w-4 h-4" />
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+          <Database className="h-4 w-4" />
         </div>
         <div>
-          <p className="font-bold text-slate-900 text-sm">Sauvegarde des données</p>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Exportez régulièrement vos données : elles vivent uniquement dans ce navigateur.
+          <p className="text-sm font-bold text-slate-900">Sauvegarde des données</p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            {hint ??
+              'Exportez régulièrement vos données : elles vivent uniquement dans ce navigateur.'}
           </p>
         </div>
       </div>
@@ -69,27 +116,39 @@ export const BackupCard: React.FC<BackupCardProps> = ({ data, onRestore }) => {
         <button
           type="button"
           onClick={handleExportJson}
+          disabled={busy !== null}
           className="btn btn-primary btn-sm"
         >
-          <Download className="w-3.5 h-3.5" />
+          {busy === 'json' ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Download className="h-3.5 w-3.5" />
+          )}
           Exporter (JSON)
         </button>
 
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          className="btn btn-outline btn-sm"
-        >
-          <Upload className="w-3.5 h-3.5" />
-          Restaurer une sauvegarde
-        </button>
+        {canRestore && onRestore && (
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            className="btn btn-outline btn-sm"
+          >
+            <Upload className="h-3.5 w-3.5" />
+            Restaurer une sauvegarde
+          </button>
+        )}
 
         <button
           type="button"
           onClick={handleExportCsv}
+          disabled={busy !== null}
           className="btn btn-accent btn-sm"
         >
-          <FileSpreadsheet className="w-3.5 h-3.5" />
+          {busy === 'csv' ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <FileSpreadsheet className="h-3.5 w-3.5" />
+          )}
           Exporter (CSV)
         </button>
 
@@ -110,9 +169,9 @@ export const BackupCard: React.FC<BackupCardProps> = ({ data, onRestore }) => {
           }`}
         >
           {feedback.type === 'success' ? (
-            <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+            <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           ) : (
-            <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           )}
           <span>{feedback.text}</span>
         </p>

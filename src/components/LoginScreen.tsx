@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { User } from '../types';
+import { errorMessage } from '../api/client';
 import { ThemeToggle } from './ThemeToggle';
 import {
   ArrowRight,
@@ -7,6 +8,7 @@ import {
   Church,
   Eye,
   EyeOff,
+  Loader2,
   Lock,
   Phone,
   ShieldCheck,
@@ -17,20 +19,44 @@ import {
 } from 'lucide-react';
 
 interface LoginScreenProps {
-  users: User[];
-  onLoginSuccess: (user: User) => void;
+  users?: User[];
+  onLoginSuccess?: (user: User) => void;
+  /** Connexion serveur (mode API). Prioritaire sur `onLoginSuccess`. */
+  onLogin?: (telephone: string, password: string) => Promise<void>;
   nomEglise: string;
+  apiMode?: boolean;
 }
 
-export const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLoginSuccess, nomEglise }) => {
+export const LoginScreen: React.FC<LoginScreenProps> = ({
+  users = [],
+  onLoginSuccess,
+  onLogin,
+  nomEglise,
+  apiMode = false,
+}) => {
   const [telephone, setTelephone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    if (onLogin) {
+      setSubmitting(true);
+      try {
+        await onLogin(telephone.trim(), password);
+      } catch (loginError) {
+        setError(errorMessage(loginError));
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    if (!onLoginSuccess) return;
 
     const cleanInput = telephone.replace(/\s+/g, '').toLowerCase();
 
@@ -89,7 +115,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLoginSuccess,
       tile: 'from-emerald-400 to-teal-600',
       ring: 'hover:border-emerald-300',
     },
-  ];
+  ].filter((item) => Boolean(item.user));
+
+  const showDemoAccess = !apiMode && Boolean(onLoginSuccess) && quickAccess.length > 0;
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-ink-950 text-slate-800">
@@ -254,7 +282,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLoginSuccess,
                       type="tel"
                       inputMode="tel"
                       autoComplete="username"
-                      placeholder="+225 07 11 22 33"
+                      placeholder={apiMode ? '+229 01 97 00 00 01' : '+225 07 11 22 33'}
                       value={telephone}
                       onChange={(e) => setTelephone(e.target.value)}
                       className="field pl-11"
@@ -289,10 +317,20 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLoginSuccess,
 
                 <button
                   type="submit"
+                  disabled={submitting}
                   className="btn btn-primary btn-lg btn-sheen group w-full"
                 >
-                  Se connecter
-                  <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+                  {submitting ? (
+                    <>
+                      Connexion…
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    </>
+                  ) : (
+                    <>
+                      Se connecter
+                      <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+                    </>
+                  )}
                 </button>
 
                 <p className="text-center text-[10px] leading-relaxed text-slate-400">
@@ -300,34 +338,38 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLoginSuccess,
                 </p>
               </form>
 
-              <div className="flex items-center gap-3">
-                <span className="h-px flex-1 bg-slate-200" />
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  Accès démo
-                </span>
-                <span className="h-px flex-1 bg-slate-200" />
-              </div>
+              {showDemoAccess && (
+                <>
+                  <div className="flex items-center gap-3">
+                    <span className="h-px flex-1 bg-slate-200" />
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Accès démo
+                    </span>
+                    <span className="h-px flex-1 bg-slate-200" />
+                  </div>
 
-              <div className="grid gap-2">
-                {quickAccess.map((item, index) => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    onClick={() => onLoginSuccess(item.user)}
-                    style={{ animationDelay: `${220 + index * 60}ms` }}
-                    className={`group flex min-h-[56px] animate-rise items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-left transition hover:-translate-y-0.5 hover:shadow-md cursor-pointer ${item.ring}`}
-                  >
-                    <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-white ${item.tile}`}>
-                      <item.icon className="h-4 w-4" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-xs font-bold text-slate-800">{item.label}</span>
-                      <span className="block truncate text-[10px] text-slate-400">{item.user.nom_complet}</span>
-                    </span>
-                    <ArrowRight className="h-4 w-4 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-500" />
-                  </button>
-                ))}
-              </div>
+                  <div className="grid gap-2">
+                    {quickAccess.map((item, index) => (
+                      <button
+                        key={item.key}
+                        type="button"
+                        onClick={() => onLoginSuccess?.(item.user)}
+                        style={{ animationDelay: `${220 + index * 60}ms` }}
+                        className={`group flex min-h-[56px] animate-rise items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-left transition hover:-translate-y-0.5 hover:shadow-md cursor-pointer ${item.ring}`}
+                      >
+                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-white ${item.tile}`}>
+                          <item.icon className="h-4 w-4" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-xs font-bold text-slate-800">{item.label}</span>
+                          <span className="block truncate text-[10px] text-slate-400">{item.user.nom_complet}</span>
+                        </span>
+                        <ArrowRight className="h-4 w-4 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-500" />
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
 
               <p className="text-center text-[10px] leading-relaxed text-slate-400">
                 Pas d'inscription libre · Comptes créés et gérés par le secrétariat
@@ -336,7 +378,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLoginSuccess,
           </div>
 
           <p className="mt-5 text-center text-[11px] text-slate-400">
-            🔒 Vos données restent sur cet appareil.
+            {apiMode
+              ? '🔒 Connexion sécurisée · Vos données sont hébergées sur le serveur de l’église.'
+              : '🔒 Vos données restent sur cet appareil.'}
           </p>
         </section>
       </div>

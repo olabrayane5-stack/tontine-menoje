@@ -43,17 +43,21 @@ export const clearStoredState = (): void => {
 /**
  * useState backed by localStorage. The seed value is only used when nothing
  * has been stored yet, so demo data survives page reloads until reset.
+ *
+ * `enabled = false` désactive complètement la persistance (mode API : les
+ * données viennent du serveur et ne doivent pas être mises en cache locale).
  */
-export const usePersistentState = <T>(key: string, initial: T | (() => T)) => {
+export const usePersistentState = <T>(key: string, initial: T | (() => T), enabled = true) => {
   const [value, setValue] = useState<T>(() => {
+    if (!enabled) return typeof initial === 'function' ? (initial as () => T)() : initial;
     const stored = readStoredState<T>(key);
     if (stored !== undefined) return stored;
     return typeof initial === 'function' ? (initial as () => T)() : initial;
   });
 
   useEffect(() => {
-    writeStoredState(key, value);
-  }, [key, value]);
+    if (enabled) writeStoredState(key, value);
+  }, [key, value, enabled]);
 
   return [value, setValue] as const;
 };

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { User, Versement, Retrait, Annonce, ParametresApp, UserStats } from '../types';
 import { calculateUserStats, formatMoney, formatDateFr, generateMemberAIResponse } from '../utils/tontineUtils';
+import { errorMessage } from '../api/client';
 import { ReceiptModal } from './ReceiptModal';
 import { AnimatedAmount } from './AnimatedAmount';
 import { Stagger, StaggerItem } from './motion/Stagger';
@@ -30,7 +31,13 @@ interface MemberDashboardProps {
   sundaysList: string[];
   annonces: Annonce[];
   parametres: ParametresApp;
-  onUpdateUserPassword: (userId: number, newPassword: string) => void;
+  /** Statistiques calculées par le serveur (mode API). */
+  serverStats?: UserStats;
+  onUpdateUserPassword: (
+    userId: number,
+    newPassword: string,
+    currentPassword?: string
+  ) => Promise<void> | void;
 }
 
 export const MemberDashboard: React.FC<MemberDashboardProps> = ({
@@ -40,6 +47,7 @@ export const MemberDashboard: React.FC<MemberDashboardProps> = ({
   sundaysList,
   annonces,
   parametres,
+  serverStats,
   onUpdateUserPassword,
 }) => {
   const [showReceipt, setShowReceipt] = useState(false);
@@ -58,12 +66,16 @@ export const MemberDashboard: React.FC<MemberDashboardProps> = ({
   const [aiQuotaUsed, setAiQuotaUsed] = useState(1);
 
   // Changement de mot de passe obligatoire première connexion
+  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState(false);
+  const [passwordSubmitting, setPasswordSubmitting] = useState(false);
 
-  const stats: UserStats = calculateUserStats(currentUser.id, allVersements, allRetraits, sundaysList, parametres.pourcentage_retenue);
+  const stats: UserStats =
+    serverStats ??
+    calculateUserStats(currentUser.id, allVersements, allRetraits, sundaysList, parametres.pourcentage_retenue);
 
   const memberVersements = allVersements
     .filter((v) => v.user_id === currentUser.id)
@@ -93,21 +105,33 @@ export const MemberDashboard: React.FC<MemberDashboardProps> = ({
     setAiQuestion('');
   };
 
-  const handlePasswordSubmit = (e: React.FormEvent) => {
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newPassword.length < 4) {
-      setPasswordError('Le mot de passe doit contenir au moins 4 caractères.');
+    setPasswordError('');
+
+    if (newPassword.length < 8 || !/[A-Za-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+      setPasswordError('8 caractères minimum, avec au moins une lettre et un chiffre.');
       return;
     }
     if (newPassword !== confirmPassword) {
       setPasswordError('Les mots de passe ne correspondent pas.');
       return;
     }
+    if (serverStats && !currentPassword) {
+      setPasswordError('Saisissez d’abord votre mot de passe provisoire actuel.');
+      return;
+    }
 
-    onUpdateUserPassword(currentUser.id, newPassword);
-    setPasswordSuccess(true);
-    setPasswordError('');
-    toast.success('Mot de passe personnel enregistré.');
+    setPasswordSubmitting(true);
+    try {
+      await onUpdateUserPassword(currentUser.id, newPassword, currentPassword || undefined);
+      setPasswordSuccess(true);
+      toast.success('Mot de passe personnel enregistré.');
+    } catch (error) {
+      setPasswordError(errorMessage(error));
+    } finally {
+      setPasswordSubmitting(false);
+    }
   };
 
   const tabs: Array<{
@@ -142,9 +166,21 @@ export const MemberDashboard: React.FC<MemberDashboardProps> = ({
             </div>
 
             <form onSubmit={handlePasswordSubmit} className="flex flex-col gap-2 sm:flex-row">
+              {serverStats && (
+                <input
+                  type="password"
+                  placeholder="Mot de passe provisoire"
+                  autoComplete="current-password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium focus:border-amber-400 focus:outline-none focus:ring-4 focus:ring-amber-500/15"
+                  required
+                />
+              )}
               <input
                 type="password"
                 placeholder="Nouveau mot de passe"
+                autoComplete="new-password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium focus:border-amber-400 focus:outline-none focus:ring-4 focus:ring-amber-500/15"
@@ -153,6 +189,7 @@ export const MemberDashboard: React.FC<MemberDashboardProps> = ({
               <input
                 type="password"
                 placeholder="Confirmer"
+                autoComplete="new-password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium focus:border-amber-400 focus:outline-none focus:ring-4 focus:ring-amber-500/15"
@@ -160,9 +197,10 @@ export const MemberDashboard: React.FC<MemberDashboardProps> = ({
               />
               <button
                 type="submit"
-                className="rounded-xl bg-slate-900 px-5 py-2.5 text-xs font-bold text-white transition hover:bg-slate-800 cursor-pointer"
+                disabled={passwordSubmitting}
+                className="rounded-xl bg-slate-900 px-5 py-2.5 text-xs font-bold text-white transition hover:bg-slate-800 disabled:opacity-60 cursor-pointer"
               >
-                Enregistrer
+                {passwordSubmitting ? 'Enregistrement…' : 'Enregistrer'}
               </button>
             </form>
             {passwordError && <p className="text-xs font-bold text-rose-600">{passwordError}</p>}
