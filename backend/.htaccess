@@ -1,0 +1,31 @@
+# ---------------------------------------------------------------------------
+# Backend Tontine M.E.NO.JE — réécriture de toutes les URL vers index.php
+# Ce fichier doit être placé dans le dossier `api/` (donc htdocs/api/.htaccess).
+# ---------------------------------------------------------------------------
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Ne pas réécrire les fichiers réellement présents (aucun ici, mais sûr).
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+
+    # Conserver la méthode HTTP et le corps de la requête.
+    RewriteRule ^ index.php [QSA,L]
+</IfModule>
+
+# Interdire l'accès direct aux sources et à la configuration.
+<FilesMatch "\.(sql|md|example\.php|ini|log)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# Pas de listing de répertoire.
+Options -Indexes
+
+# Les en-têtes de sécurité sont envoyés par PHP (lib/bootstrap.php).

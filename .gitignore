@@ -7,3 +7,5 @@ coverage/
 .env*
 !.env.example
 .vercel
+backend/config.php
+backend/tontine-config.php
